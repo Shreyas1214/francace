@@ -8,6 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.69",
+    "@ai-sdk/react": "^3.0.164",
+    "ai": "^6.0.162",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.9.0",
     "jose": "^6.2.2",

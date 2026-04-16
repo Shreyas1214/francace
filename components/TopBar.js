@@ -26,9 +26,20 @@ export function TopBar({ title, subtitle }) {
           </div>
           <span className="progress-value">{progress}%</span>
         </div>
-        <button className="btn-outline outline-sm" onClick={toggleExamType}>
-          {examType} Canada <span className="icon">⇄</span>
-        </button>
+        <div className="exam-tabs">
+          <button 
+            className={`exam-tab ${examType === 'TEF' ? 'active' : ''}`} 
+            onClick={() => examType !== 'TEF' && toggleExamType()}
+          >
+            TEF <span className="tab-context">Canada</span>
+          </button>
+          <button 
+            className={`exam-tab ${examType === 'TCF' ? 'active' : ''}`} 
+            onClick={() => examType !== 'TCF' && toggleExamType()}
+          >
+            TCF <span className="tab-context">Canada</span>
+          </button>
+        </div>
       </div>
     </header>
   );
