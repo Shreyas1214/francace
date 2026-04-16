@@ -34,7 +34,7 @@ export default function Dashboard() {
       <TopBar title="Dashboard" subtitle="Welcome back!" />
       <div className="module-content fade-in">
         <div className="welcome-banner glass-panel" style={{ padding: '2rem', marginBottom: '2rem' }}>
-          <h2>{greeting}, <span className="highlight-text">learner</span>! <span role="img" aria-label="sprout">🌱</span></h2>
+          <h2>{greeting}, <span className="highlight-text">{state.user.name || 'learner'}</span>! <span role="img" aria-label="sprout">🌱</span></h2>
           <p style={{ color: 'rgba(255,255,255,0.7)', margin: '0.5rem 0 1.5rem' }}>
             Level: {state.user.levelLabel} ({state.user.level}) · CLB {state.user.clb} · Target: {exam} Canada
           </p>

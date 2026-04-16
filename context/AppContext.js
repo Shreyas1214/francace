@@ -3,10 +3,12 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 
 const DEFAULT_STATE = {
   user: {
+    id: null,
+    name: '',
+    email: '',
     level: 'A1', levelLabel: 'Débutant', levelIcon: '🌱', clb: 1,
     examType: 'TEF', examDate: null, dailyGoal: 30,
     streak: 0, lastActiveDate: null, totalMinutes: 0,
-    joinDate: new Date().toISOString()
   },
   progress: {
     alphabet: { completed: 0, total: 42, mastered: [] },
@@ -40,64 +42,33 @@ export function AppProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const toastId = useRef(0);
 
-  // Load state from localStorage on mount
+  // Fetch state from real database on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('francace_state');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setState(deepMerge(JSON.parse(JSON.stringify(DEFAULT_STATE)), parsed));
-      } else {
+    async function loadUser() {
+      try {
+        const res = await fetch('/api/user');
+        if (res.ok) {
+          const data = await res.json();
+          // Build a normalized state matching expected shape
+          const normalizedState = deepMerge(JSON.parse(JSON.stringify(DEFAULT_STATE)), {
+            user: {
+              ...data.user,
+              ...data.stats,
+            },
+            progress: data.progress,
+            settings: { examType: data.user.examType || 'TEF' }
+          });
+          setState(normalizedState);
+        } else {
+          // If unauthorized, default state (middleware handles redirect anyway)
+          setState(JSON.parse(JSON.stringify(DEFAULT_STATE)));
+        }
+      } catch (err) {
+        console.error('Failed to load user:', err);
         setState(JSON.parse(JSON.stringify(DEFAULT_STATE)));
       }
-    } catch {
-      setState(JSON.parse(JSON.stringify(DEFAULT_STATE)));
     }
-  }, []);
-
-  // Save to localStorage whenever state changes
-  useEffect(() => {
-    if (!state) return;
-    try {
-      localStorage.setItem('francace_state', JSON.stringify(state));
-    } catch (e) {
-      console.warn('Failed to save state:', e);
-    }
-  }, [state]);
-
-  // Streak management
-  useEffect(() => {
-    if (!state) return;
-    const today = new Date().toDateString();
-    if (state.user.lastActiveDate === today) return;
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    let newStreak;
-    if (state.user.lastActiveDate === yesterday) {
-      newStreak = state.user.streak + 1;
-    } else {
-      newStreak = 1;
-    }
-    setState(prev => ({
-      ...prev,
-      user: { ...prev.user, streak: newStreak, lastActiveDate: today }
-    }));
-  }, [state?.user?.lastActiveDate]);
-
-  const saveState = useCallback((updater) => {
-    setState(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      return next;
-    });
-  }, []);
-
-  const updateProgress = useCallback((module, updates) => {
-    setState(prev => ({
-      ...prev,
-      progress: {
-        ...prev.progress,
-        [module]: { ...prev.progress[module], ...updates }
-      }
-    }));
+    loadUser();
   }, []);
 
   const showToast = useCallback((message, type = 'info', duration = 3000) => {
@@ -112,11 +83,56 @@ export function AppProvider({ children }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  const saveState = useCallback((updater) => {
+    setState(prev => typeof updater === 'function' ? updater(prev) : updater);
+  }, []);
+
+  // Update progress locally AND sync to database
+  const updateProgress = useCallback(async (module, updates) => {
+    setState(prev => {
+      const currentMod = prev.progress[module] || {};
+      const updatedMod = { ...currentMod, ...updates };
+
+      // Sync to backend asynchronously
+      fetch('/api/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module,
+          completed: updatedMod.completed,
+          total: updatedMod.total,
+          data: updatedMod
+        })
+      }).then(res => res.json()).then(data => {
+        if (data.success && (data.level !== prev.user.level || data.streak !== prev.user.streak)) {
+           // Backend recalculated level/streak, update it locally
+           setState(s => ({
+             ...s, 
+             user: { 
+               ...s.user, 
+               level: data.level, 
+               clb: data.clb, 
+               streak: data.streak 
+             }
+           }));
+        }
+      }).catch(err => console.error("Sync error:", err));
+
+      return {
+        ...prev,
+        progress: {
+          ...prev.progress,
+          [module]: updatedMod
+        }
+      };
+    });
+  }, []);
+
+  const calculateLevel = useCallback(() => { /* now handled primarily by backend sync */ }, []);
+
   const resetState = useCallback(() => {
-    const fresh = JSON.parse(JSON.stringify(DEFAULT_STATE));
-    setState(fresh);
-    localStorage.removeItem('francace_state');
-    showToast('All progress has been reset', 'info');
+    // Currently disabled for DB
+    showToast('Cannot reset progress yet', 'error');
   }, [showToast]);
 
   const toggleExamType = useCallback(() => {
@@ -130,49 +146,17 @@ export function AppProvider({ children }) {
     });
   }, []);
 
-  // Calculate level from progress
-  const calculateLevel = useCallback(() => {
-    setState(prev => {
-      if (!prev) return prev;
-      const p = prev.progress;
-      const totalCompleted =
-        (p.alphabet.completed / Math.max(p.alphabet.total, 1)) * 10 +
-        (p.vocabulary.completed / Math.max(p.vocabulary.total, 1)) * 20 +
-        (p.grammar.completed / Math.max(p.grammar.total, 1)) * 20 +
-        (p.listening.completed / Math.max(p.listening.total, 1)) * 15 +
-        (p.reading.completed / Math.max(p.reading.total, 1)) * 15 +
-        (p.writing.completed / Math.max(p.writing.total, 1)) * 10 +
-        (p.conversation.completed / Math.max(p.conversation.total, 1)) * 10;
-      
-      let level, label, icon, clb;
-      if (totalCompleted >= 90) { level = 'C1'; label = "Prêt pour l'examen"; icon = '🏆'; clb = 10; }
-      else if (totalCompleted >= 70) { level = 'C1'; label = 'Expert'; icon = '🎯'; clb = 8; }
-      else if (totalCompleted >= 50) { level = 'B2'; label = 'Avancé'; icon = '✍️'; clb = 7; }
-      else if (totalCompleted >= 30) { level = 'B1'; label = 'Intermédiaire'; icon = '🗣️'; clb = 5; }
-      else if (totalCompleted >= 15) { level = 'A2'; label = 'Élémentaire'; icon = '📚'; clb = 3; }
-      else { level = 'A1'; label = 'Débutant'; icon = '🌱'; clb = 1; }
-      
-      // Prevent infinite loop if nothing actually changed
-      if (prev.user.level === level && prev.user.clb === clb) return prev;
-
-      return {
-        ...prev,
-        user: { ...prev.user, level, levelLabel: label, levelIcon: icon, clb }
-      };
-    });
-  }, []);
-
   const getOverallProgress = useCallback(() => {
     if (!state) return 0;
     const p = state.progress;
     const items = [
-      p.alphabet.completed / Math.max(p.alphabet.total, 1),
-      p.vocabulary.completed / Math.max(p.vocabulary.total, 1),
-      p.grammar.completed / Math.max(p.grammar.total, 1),
-      p.listening.completed / Math.max(p.listening.total, 1),
-      p.reading.completed / Math.max(p.reading.total, 1),
-      p.writing.completed / Math.max(p.writing.total, 1),
-      p.conversation.completed / Math.max(p.conversation.total, 1)
+      p.alphabet.completed / Math.max(p.alphabet.total || 1, 1),
+      p.vocabulary.completed / Math.max(p.vocabulary.total || 1, 1),
+      p.grammar.completed / Math.max(p.grammar.total || 1, 1),
+      p.listening.completed / Math.max(p.listening.total || 1, 1),
+      p.reading.completed / Math.max(p.reading.total || 1, 1),
+      p.writing.completed / Math.max(p.writing.total || 1, 1),
+      p.conversation.completed / Math.max(p.conversation.total || 1, 1)
     ];
     return Math.round((items.reduce((a, b) => a + b, 0) / items.length) * 100);
   }, [state]);
