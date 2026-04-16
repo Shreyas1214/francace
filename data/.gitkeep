@@ -1,0 +1,2 @@
+# This directory contains the SQLite database file.
+# The .db file is gitignored; it will be created automatically on first run.
