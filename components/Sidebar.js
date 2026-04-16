@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from '../context/AppContext';
-import { logout } from '@/app/actions/auth';
 
 export function Sidebar({ openSettings, mobileOpen, closeMobile }) {
   const pathname = usePathname();
@@ -12,6 +11,12 @@ export function Sidebar({ openSettings, mobileOpen, closeMobile }) {
   const levelLabel = state?.user?.levelLabel || 'Débutant';
   const icon = state?.user?.levelIcon || '🌱';
   const streak = state?.user?.streak || 0;
+
+  const handleLogout = () => {
+    localStorage.removeItem('francace_auth_token');
+    localStorage.removeItem('francace_user_state');
+    window.location.href = '/login';
+  };
 
   const NavItem = ({ to, iconStr, label, badge }) => {
     const isActive = pathname === to || pathname === `${to}/`;
@@ -84,11 +89,9 @@ export function Sidebar({ openSettings, mobileOpen, closeMobile }) {
         <button className="settings-btn" onClick={openSettings}>
           <span className="icon">⚙️</span> Settings
         </button>
-        <form action={logout}>
-          <button type="submit" className="settings-btn" style={{ width: '100%', color: 'var(--accent-secondary)' }}>
-            <span className="icon">🚪</span> Sign Out
-          </button>
-        </form>
+        <button type="button" onClick={handleLogout} className="settings-btn" style={{ width: '100%', color: 'var(--accent-secondary)' }}>
+          <span className="icon">🚪</span> Sign Out
+        </button>
       </div>
     </aside>
   );

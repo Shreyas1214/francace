@@ -1,10 +1,12 @@
 'use client';
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
+const STORAGE_KEY = 'francace_user_state';
+
 const DEFAULT_STATE = {
   user: {
-    id: null,
-    name: '',
+    id: 'local_user',
+    name: 'Learner',
     email: '',
     level: 'A1', levelLabel: 'Débutant', levelIcon: '🌱', clb: 1,
     examType: 'TEF', examDate: null, dailyGoal: 30,
@@ -41,35 +43,33 @@ export function AppProvider({ children }) {
   const [state, setState] = useState(null);
   const [toasts, setToasts] = useState([]);
   const toastId = useRef(0);
+  const isInitialized = useRef(false);
 
-  // Fetch state from real database on mount
   useEffect(() => {
-    async function loadUser() {
+    if (typeof window !== 'undefined') {
       try {
-        const res = await fetch('/api/user');
-        if (res.ok) {
-          const data = await res.json();
-          // Build a normalized state matching expected shape
-          const normalizedState = deepMerge(JSON.parse(JSON.stringify(DEFAULT_STATE)), {
-            user: {
-              ...data.user,
-              ...data.stats,
-            },
-            progress: data.progress,
-            settings: { examType: data.user.examType || 'TEF' }
-          });
-          setState(normalizedState);
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          setState(deepMerge(JSON.parse(JSON.stringify(DEFAULT_STATE)), JSON.parse(saved)));
         } else {
-          // If unauthorized, default state (middleware handles redirect anyway)
           setState(JSON.parse(JSON.stringify(DEFAULT_STATE)));
         }
       } catch (err) {
-        console.error('Failed to load user:', err);
+        console.error('Local storage error:', err);
         setState(JSON.parse(JSON.stringify(DEFAULT_STATE)));
       }
     }
-    loadUser();
   }, []);
+
+  useEffect(() => {
+    if (state && typeof window !== 'undefined') {
+      if (isInitialized.current) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } else {
+        isInitialized.current = true;
+      }
+    }
+  }, [state]);
 
   const showToast = useCallback((message, type = 'info', duration = 3000) => {
     const id = ++toastId.current;
@@ -87,36 +87,10 @@ export function AppProvider({ children }) {
     setState(prev => typeof updater === 'function' ? updater(prev) : updater);
   }, []);
 
-  // Update progress locally AND sync to database
-  const updateProgress = useCallback(async (module, updates) => {
+  const updateProgress = useCallback((module, updates) => {
     setState(prev => {
       const currentMod = prev.progress[module] || {};
       const updatedMod = { ...currentMod, ...updates };
-
-      // Sync to backend asynchronously
-      fetch('/api/progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          module,
-          completed: updatedMod.completed,
-          total: updatedMod.total,
-          data: updatedMod
-        })
-      }).then(res => res.json()).then(data => {
-        if (data.success && (data.level !== prev.user.level || data.streak !== prev.user.streak)) {
-           // Backend recalculated level/streak, update it locally
-           setState(s => ({
-             ...s, 
-             user: { 
-               ...s.user, 
-               level: data.level, 
-               clb: data.clb, 
-               streak: data.streak 
-             }
-           }));
-        }
-      }).catch(err => console.error("Sync error:", err));
 
       return {
         ...prev,
@@ -128,11 +102,42 @@ export function AppProvider({ children }) {
     });
   }, []);
 
-  const calculateLevel = useCallback(() => { /* now handled primarily by backend sync */ }, []);
+  const calculateLevel = useCallback(() => {
+    if (!state) return;
+    
+    // Simple local simulation of CLB level
+    let avgScore = 0;
+    try {
+      const p = state.progress;
+      let totalItemsCompleted = p.listening.completed + p.reading.completed + p.grammar.completed;
+      let totalMins = state.user.totalMinutes;
+      avgScore = Math.min(100, (totalItemsCompleted * 2) + Math.floor(totalMins / 10));
+    } catch(e){}
+
+    let newClb = 1;
+    let newLevel = 'A1';
+    let newLabel = 'Débutant';
+    let newIcon = '🌱';
+
+    if (avgScore > 90) { newClb = 10; newLevel = 'C1'; newLabel = 'Avancé'; newIcon = '👑'; }
+    else if (avgScore > 75) { newClb = 7; newLevel = 'B2'; newLabel = 'Intermédiaire Fort'; newIcon = '🚀'; }
+    else if (avgScore > 50) { newClb = 5; newLevel = 'B1'; newLabel = 'Intermédiaire'; newIcon = '⭐'; }
+    else if (avgScore > 25) { newClb = 4; newLevel = 'A2'; newLabel = 'Élémentaire'; newIcon = '🌿'; }
+
+    if (state.user.clb !== newClb) {
+      setState(prev => ({
+        ...prev,
+        user: { ...prev.user, level: newLevel, levelLabel: newLabel, levelIcon: newIcon, clb: newClb }
+      }));
+    }
+  }, [state]);
 
   const resetState = useCallback(() => {
-    // Currently disabled for DB
-    showToast('Cannot reset progress yet', 'error');
+    setState(JSON.parse(JSON.stringify(DEFAULT_STATE)));
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+    showToast('Progress reset successfully');
   }, [showToast]);
 
   const toggleExamType = useCallback(() => {

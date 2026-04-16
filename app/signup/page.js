@@ -1,201 +1,182 @@
 'use client';
-
-import { useActionState, useState } from 'react';
-import { signup } from '@/app/actions/auth';
+import { useState } from 'react';
 import Link from 'next/link';
 
 export default function SignupPage() {
-  const [state, action, pending] = useActionState(signup, undefined);
-  const [passwordValue, setPasswordValue] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
 
-  const checks = {
-    length: passwordValue.length >= 8,
-    letter: /[a-zA-Z]/.test(passwordValue),
-    number: /[0-9]/.test(passwordValue),
+  const calculateStrength = (password) => {
+    let strength = 0;
+    if (password.length > 7) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+    return strength;
+  };
+
+  const strength = calculateStrength(formData.password);
+
+  const getStrengthLabel = () => {
+    if (formData.password.length === 0) return '';
+    if (strength <= 1) return 'Weak';
+    if (strength === 2) return 'Fair';
+    if (strength === 3) return 'Good';
+    return 'Strong';
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    setTimeout(() => {
+      if (formData.email.includes('@') && formData.password.length > 5 && formData.name) {
+        localStorage.setItem('francace_auth_token', 'simulated_token_123');
+        // Add user info
+        try {
+          const stateStr = localStorage.getItem('francace_user_state') || '{}';
+          const state = JSON.parse(stateStr);
+          if(!state.user) state.user = {};
+          state.user.name = formData.name;
+          state.user.email = formData.email;
+          localStorage.setItem('francace_user_state', JSON.stringify(state));
+        } catch (err) {}
+        
+        window.location.href = '/';
+      } else {
+        setError('Please check your inputs.');
+        setLoading(false);
+      }
+    }, 1500);
   };
 
   return (
     <div className="auth-page">
-      <div className="auth-ambient-bg">
-        <div className="auth-orb auth-orb-1"></div>
-        <div className="auth-orb auth-orb-2"></div>
-        <div className="auth-orb auth-orb-3"></div>
-      </div>
+      {/* Background Orbs */}
+      <div className="auth-orb auth-orb-1"></div>
+      <div className="auth-orb auth-orb-2"></div>
+      <div className="auth-orb auth-orb-3"></div>
 
-      <div className="auth-container">
-        {/* Left Panel — Branding */}
-        <div className="auth-brand-panel">
+      <div className="auth-container glass-panel" style={{ flexDirection: 'row-reverse' }}>
+        <div className="auth-brand-panel" style={{ borderRight: 'none', borderLeft: '1px solid var(--glass-border)' }}>
           <div className="auth-brand-content">
-            <div className="auth-brand-logo">
-              <span className="auth-flag" role="img" aria-label="French flag">🇫🇷</span>
-              <span className="auth-brand-name">FrançAce</span>
-              <span className="auth-maple" role="img" aria-label="maple leaf">🍁</span>
-            </div>
-            <p className="auth-tagline">Ace your French. Unlock Canada.</p>
+            <Link href="/" className="auth-brand-logo">
+              <span style={{ fontSize: '2rem' }}>⚜️</span>
+              <span className="logo-text">Franc<span className="accent">Ace</span></span>
+            </Link>
             
-            <div className="auth-features">
-              <div className="auth-feature-item">
-                <span className="auth-feature-icon">🎯</span>
-                <div>
-                  <h4>Adaptive Learning</h4>
-                  <p>Personalized pathways from A1 beginner to C2 mastery</p>
-                </div>
+            <p className="auth-tagline">
+              Join thousands of candidates passing their TEF/TCF exams.
+            </p>
+
+            <div className="auth-stats-row">
+              <div className="stat-box">
+                <span className="stat-value">92%</span>
+                <span className="stat-label">Pass Rate</span>
               </div>
-              <div className="auth-feature-item">
-                <span className="auth-feature-icon">📝</span>
-                <div>
-                  <h4>Mock Exams</h4>
-                  <p>Realistic simulations replicating actual TEF &amp; TCF conditions</p>
-                </div>
-              </div>
-              <div className="auth-feature-item">
-                <span className="auth-feature-icon">🔊</span>
-                <div>
-                  <h4>French TTS</h4>
-                  <p>Hear native French pronunciation for every word and sentence</p>
-                </div>
+              <div className="stat-box">
+                <span className="stat-value">50k+</span>
+                <span className="stat-label">Learners</span>
               </div>
             </div>
-
-            <div className="auth-testimonial">
-              <p>&ldquo;FrançAce helped me go from zero French to CLB 7 in 4 months. The mock exams were incredibly realistic.&rdquo;</p>
-              <div className="auth-testimonial-author">
-                <span className="auth-testimonial-avatar">👩‍💻</span>
+            
+            <div className="auth-features" style={{ marginTop: '2rem' }}>
+              <div className="feature-item">
+                <span className="feature-icon">📈</span>
                 <div>
-                  <strong>Priya S.</strong>
-                  <span>Express Entry Applicant</span>
+                  <h4>Real-time Progress</h4>
+                  <p>Track your implied CLB score</p>
+                </div>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">🎧</span>
+                <div>
+                  <h4>Native Audio</h4>
+                  <p>Practice with Quebecois & French accents</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
-        {/* Right Panel — Signup Form */}
+        
         <div className="auth-form-panel">
-          <div className="auth-form-wrapper">
-            <div className="auth-form-header">
-              <h1>Create Account</h1>
-              <p>Start your path to TEF/TCF success</p>
+          <div className="auth-form-header">
+            <h2>Create Account</h2>
+            <p>Start your customized TEF/TCF learning plan.</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="input-group">
+              <label htmlFor="name">Full Name</label>
+              <div className="input-wrapper">
+                <span className="input-icon">👤</span>
+                <input 
+                  type="text" 
+                  id="name" 
+                  name="name" 
+                  placeholder="Jean Dupont" 
+                  required 
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                />
+              </div>
             </div>
 
-            <form action={action} className="auth-form">
-              <div className="auth-field">
-                <label htmlFor="name">Full Name</label>
-                <div className="auth-input-wrapper">
-                  <span className="auth-input-icon">👤</span>
-                  <input
-                    id="name"
-                    name="name"
-                    type="text"
-                    placeholder="Your full name"
-                    autoComplete="name"
-                    required
-                  />
-                </div>
-                {state?.errors?.name && (
-                  <div className="auth-error">
-                    {state.errors.name.map((error, i) => (
-                      <p key={i}>{error}</p>
-                    ))}
-                  </div>
-                )}
+            <div className="input-group">
+              <label htmlFor="email">Email</label>
+              <div className="input-wrapper">
+                <span className="input-icon">✉️</span>
+                <input 
+                  type="email" 
+                  id="email" 
+                  name="email" 
+                  placeholder="vous@exemple.com" 
+                  required 
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                />
               </div>
+            </div>
 
-              <div className="auth-field">
-                <label htmlFor="email">Email Address</label>
-                <div className="auth-input-wrapper">
-                  <span className="auth-input-icon">✉️</span>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    required
-                  />
-                </div>
-                {state?.errors?.email && (
-                  <div className="auth-error">
-                    {state.errors.email.map((error, i) => (
-                      <p key={i}>{error}</p>
-                    ))}
-                  </div>
-                )}
+            <div className="input-group">
+              <label htmlFor="password">Password</label>
+              <div className="input-wrapper">
+                <span className="input-icon">🔒</span>
+                <input 
+                  type="password" 
+                  id="password" 
+                  name="password" 
+                  placeholder="••••••••" 
+                  required 
+                  value={formData.password}
+                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                />
               </div>
-
-              <div className="auth-field">
-                <label htmlFor="password">Password</label>
-                <div className="auth-input-wrapper">
-                  <span className="auth-input-icon">🔒</span>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    placeholder="Create a strong password"
-                    autoComplete="new-password"
-                    required
-                    value={passwordValue}
-                    onChange={(e) => setPasswordValue(e.target.value)}
-                  />
-                </div>
-                {state?.errors?.password && (
-                  <div className="auth-error">
-                    {state.errors.password.map((error, i) => (
-                      <p key={i}>{error}</p>
-                    ))}
+              
+              {formData.password && (
+                <div className="password-strength">
+                  <div className="strength-bars">
+                    <div className={`strength-bar ${strength >= 1 ? 'active var-weak' : ''}`}></div>
+                    <div className={`strength-bar ${strength >= 2 ? 'active var-fair' : ''}`}></div>
+                    <div className={`strength-bar ${strength >= 3 ? 'active var-good' : ''}`}></div>
+                    <div className={`strength-bar ${strength >= 4 ? 'active var-strong' : ''}`}></div>
                   </div>
-                )}
-                {passwordValue.length > 0 && (
-                  <div className="auth-password-checks">
-                    <div className={`auth-check ${checks.length ? 'pass' : ''}`}>
-                      <span>{checks.length ? '✓' : '○'}</span> At least 8 characters
-                    </div>
-                    <div className={`auth-check ${checks.letter ? 'pass' : ''}`}>
-                      <span>{checks.letter ? '✓' : '○'}</span> Contains a letter
-                    </div>
-                    <div className={`auth-check ${checks.number ? 'pass' : ''}`}>
-                      <span>{checks.number ? '✓' : '○'}</span> Contains a number
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {state?.message && (
-                <div className="auth-error auth-error-general">
-                  <p>{state.message}</p>
+                  <span className="strength-label">{getStrengthLabel()}</span>
                 </div>
               )}
-
-              <button type="submit" className="auth-submit-btn" disabled={pending}>
-                {pending ? (
-                  <>
-                    <span className="auth-spinner"></span>
-                    Creating account...
-                  </>
-                ) : (
-                  <>
-                    <span>Create Account</span>
-                    <span className="auth-btn-arrow">→</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            <div className="auth-divider">
-              <span>or</span>
             </div>
 
-            <p className="auth-switch">
-              Already have an account?{' '}
-              <Link href="/login" className="auth-switch-link">
-                Sign in
-              </Link>
-            </p>
+            {error && <div className="form-error">{error}</div>}
 
-            <p className="auth-footer-text">
-              <span role="img" aria-label="sparkle">✨</span> Free forever — no credit card required
-            </p>
-          </div>
+            <button type="submit" className="btn-auth-submit" disabled={loading}>
+              {loading ? <span className="spinner"></span> : 'Create Account'}
+            </button>
+          </form>
+
+          <p className="auth-redirect">
+            Already have an account? <Link href="/login">Log in</Link>
+          </p>
         </div>
       </div>
     </div>
